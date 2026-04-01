@@ -34,13 +34,11 @@ def main():
     x_cyl = chamber_radius * np.cos(theta_grid)
     y_cyl = chamber_radius * np.sin(theta_grid)
 
-    # Made the chamber walls highly transparent so the plasma pops out
     ax.plot_surface(x_cyl, y_cyl, z_grid, alpha=0.05, color='gray', edgecolor='lightgray')
 
     # --- 2. Simulate Volumetric Plasma Density ---
-    num_points = 8000 # Number of "gas particles" to simulate
+    num_points = 8000
     
-    # Generate points uniformly within the cylinder volume
     r_pts = chamber_radius * np.sqrt(np.random.rand(num_points)) 
     theta_pts = np.random.rand(num_points) * 2 * np.pi
     z_pts = np.random.rand(num_points) * chamber_height
@@ -48,25 +46,32 @@ def main():
     x_pts = r_pts * np.cos(theta_pts)
     y_pts = r_pts * np.sin(theta_pts)
 
-    # Define a simplified density function (Diffusion model approximation)
-    # Density peaks at center (r=0, z=h/2) and decays outward
     r_norm = r_pts / chamber_radius
     z_norm = (z_pts - (chamber_height / 2)) / (chamber_height / 2)
     
-    # Gaussian-like dropoff for visual effect
-    density = np.exp(-2.0 * r_norm**2 - 3.5 * z_norm**2) 
+    #mess with this line below:
+    density = np.exp(-10.0 * r_norm**2 - 15.0 * z_norm**2) 
 
-    # Filter out extremely low-density points to keep the plot clean
     mask = density > 0.05
     x_pts, y_pts, z_pts, density = x_pts[mask], y_pts[mask], z_pts[mask], density[mask]
 
-    # Plot the plasma using a scatter plot
-    # cmap='Blues' gives us the light-to-deep blue color mapping
-    plasma_scatter = ax.scatter(x_pts, y_pts, z_pts, c=density, cmap='Blues', 
-                                alpha=density * 0.7, s=25, edgecolors='none', label='Plasma')
+    # --- THE FIX: Calculate RGBA colors manually to avoid the alpha array bug ---
+    # Normalize density values between 0 and 1
+    norm = plt.Normalize(vmin=density.min(), vmax=density.max())
+    
+    # Get the RGB base colors from the 'Blues' colormap
+    rgba_colors = plt.cm.Blues(norm(density))
+    
+    # Modify the Alpha (transparency) channel (index 3) based on density
+    rgba_colors[:, 3] = norm(density) * 0.7 
 
-    # Add a colorbar to show the density scale
-    cbar = fig.colorbar(plasma_scatter, ax=ax, pad=0.1, shrink=0.6)
+    # Plot the plasma using the custom RGBA array
+    plasma_scatter = ax.scatter(x_pts, y_pts, z_pts, c=rgba_colors, s=25, edgecolors='none', label='Plasma')
+
+    # Add a colorbar using a ScalarMappable since we passed raw colors to scatter
+    sm = plt.cm.ScalarMappable(cmap='Blues', norm=norm)
+    sm.set_array([]) 
+    cbar = fig.colorbar(sm, ax=ax, pad=0.1, shrink=0.6)
     cbar.set_label('Relative Plasma Density', rotation=270, labelpad=15)
 
     # --- 3. Draw the RF Coil (Helix) ---
@@ -89,16 +94,18 @@ def main():
     ax.set_ylabel('Y Axis (cm)')
     ax.set_zlabel('Z Axis (cm)')
 
-    # Set equal aspect ratio
     ax.set_box_aspect([1, 1, chamber_height/(2*chamber_radius)]) 
 
     ax.xaxis.pane.fill = False
     ax.yaxis.pane.fill = False
     ax.zaxis.pane.fill = False
-    
-    # Custom legend handling to avoid showing all 8000 scatter points
+
+    # Add this near the bottom of your script to lock the visual scale
+    ax.set_xlim([-15, 15])
+    ax.set_ylim([-15, 15])
+    ax.set_zlim([0, 30])
+
     handles, labels = ax.get_legend_handles_labels()
-    # Filter to only show unique labels
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc='upper right')
 
